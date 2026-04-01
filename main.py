@@ -10,15 +10,27 @@ load_dotenv()
 
 
 class GeometryEntity(BaseModel):
-    name: str = Field(description="Название фигуры или объекта")
-    type: str = Field(description="Тип объекта")
-    properties: List[str] = Field(description="Список свойств")
+    name: str = Field(description="Название фигуры или объекта (например, 'пирамида SABCD')")
+    type: str = Field(description="Тип объекта (например, 'многогранник', 'плоскость')")
+    properties: List[str] = Field(description="Известные характеристики (например, ['правильная', 'высота = 6'])")
 
 
-class GeometryResponse(BaseModel):
-    reasoning: str = Field(description="Логика решения")
-    entities: List[GeometryEntity] = Field(description="Геометрические сущности")
-    result: str = Field(description="Ответ")
+class GeometrySGRResponse(BaseModel):
+    step_1_extracted_facts: List[GeometryEntity] = Field(
+        description="Шаг 1: Сбор фактов. Извлеки все геометрические объекты и их свойства из условия."
+    )
+    step_2_goal_definition: str = Field(
+        description="Шаг 2: Формулировка цели. Кратко опиши, что именно требуется найти или доказать."
+    )
+    step_3_theorems_and_formulas: List[str] = Field(
+        description="Шаг 3: Математическая база. Перечисли теоремы и формулы, необходимые для решения этой задачи."
+    )
+    step_4_solution_plan: str = Field(
+        description="Шаг 4: Пошаговый план решения. Опиши логику применения формул из Шага 3 к фактам из Шага 1."
+    )
+    step_5_final_result: str = Field(
+        description="Шаг 5: Итоговый ответ. Краткий финальный численный или алгебраический результат."
+    )
 
 
 app = FastAPI(title="StereoMind API Prototype")
@@ -26,10 +38,10 @@ app = FastAPI(title="StereoMind API Prototype")
 
 class SolveRequest(BaseModel):
     problem_text: str
-    temperature: Optional[float] = 0.1
+    temperature: Optional[float] = 0.0
 
 
-@app.post("/solve", response_model=GeometryResponse)
+@app.post("/solve", response_model=GeometrySGRResponse)
 async def solve_geometry_problem(request: SolveRequest):
     try:
         llm = ChatOpenAI(
@@ -39,7 +51,7 @@ async def solve_geometry_problem(request: SolveRequest):
             temperature=request.temperature
         )
 
-        structured_llm = llm.with_structured_output(GeometryResponse)
+        structured_llm = llm.with_structured_output(GeometrySGRResponse)
 
         system_prompt = (
             "<role>\n"
@@ -49,7 +61,7 @@ async def solve_geometry_problem(request: SolveRequest):
 
             "<goal>\n"
             "Твоя цель: преобразовать текст геометрической задачи в структурированную математическую модель, "
-            "которая послужит основой для генерации программного кода.\n"
+            "через строгую последовательность шагов рассуждения. \n"
             "</goal>\n\n"
 
             "<context>\n"
@@ -58,18 +70,18 @@ async def solve_geometry_problem(request: SolveRequest):
             "</context>\n\n"
 
             "<instructions>\n"
-            "Выполни задачу пошагово:\n"
-            "1. Тщательно проанализируй текст задачи, предоставленный в тегах <problem_text>.\n"
-            "2. Идентифицируй все геометрические фигуры и объекты. Для каждого объекта укажи его тип и все известные численные характеристики.\n"
-            "3. Сформулируй пошаговую логику решения (reasoning). Опиши, какие математические зависимости или теоремы нужно применить.\n"
-            "4. Определи финальный искомый результат.\n"
-            "5. Сформируй ответ строго в формате JSON, соответствующем заданной схеме.\n"
+            "Выполни задачу, строго заполняя поля JSON-схемы шаг за шагом:\n"
+            "1. В поле 'step_1_extracted_facts' тщательно проанализируй текст из <problem_text> и идентифицируй все фигуры и их численные характеристики.\n"
+            "2. В поле 'step_2_goal_definition' определи искомый результат.\n"
+            "3. В поле 'step_3_theorems_and_formulas' выпиши математические зависимости или теоремы, которые нужно применить.\n"
+            "4. В поле 'step_4_solution_plan' сформулируй пошаговую логику решения.\n"
+            "5. В поле 'step_5_final_result' укажи только финальный ответ.\n"
             "</instructions>\n\n"
 
             "<constraints>\n"
             "- Инструкции должны быть четкими, без лишних слов.\n"
-            "- В поле 'properties' записывай только факты (например, 'сторона = 5'), без длинных предложений.\n"
-            "- Если в задаче недостаточно данных для однозначного решения, укажи это в поле 'reasoning'.\n"
+            "- В характеристиках объектов (properties) на шаге 1 записывай только факты (например, 'сторона = 5'), без длинных предложений.\n"
+            "- Если в задаче недостаточно данных для однозначного решения, укажи это в поле 'step_4_solution_plan'.\n"
             "</constraints>\n\n"
 
             "Входные данные (текст задачи) будут переданы пользователем ниже."
@@ -93,7 +105,14 @@ async def solve_geometry_problem(request: SolveRequest):
 
 {
   "problem_text": "В правильной треугольной пирамиде сторона основания равна 4, а высота равна 6. Найдите объем пирамиды.",
-  "temperature": 0.1
+  "temperature": 0.0
 }
+
+
+{
+  "problem_text": "Дана правильная треугольная призма ABCA1B1C1, все рёбра основания которой равны 2*sqrt(7). Сечение, проходящее через боковое ребро AA1 и середину M ребра B1C1, является квадратом. Найдите расстояние между прямыми A1B и AM",
+  "temperature": 0.0
+}
+
 
 """
