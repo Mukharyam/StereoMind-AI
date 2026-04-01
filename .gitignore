@@ -1,0 +1,4 @@
+.env
+keys.txt
+.idea/
+__pycache__/
